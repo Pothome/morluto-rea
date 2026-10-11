@@ -103,6 +103,13 @@ build's source revision, so that field remains unknown.
   engine finished its configured extraction without those reported conditions;
   default skip rules and format coverage still apply. It does not establish
   complete firmware reconstruction.
+- `extraction_gaps` makes those conditions recoverable: one row per unextracted
+  or carved region, with its chunk identity, byte range and original-file range
+  when the chunk belongs to the selected input, the exact dependency names from
+  the producer's missing-dependency reports, and a supported continuation that
+  uses already configured capabilities where one exists. A listed gap does not
+  mean the target is corrupt or that a retained region is empty; REA installs
+  nothing.
 - The destination must be absent, absolute, with an existing parent. Publication
   uses exclusive, symlink-resistant writes and durable digest readback. Existing
   destinations are never overwritten. This is not an atomic directory rename:

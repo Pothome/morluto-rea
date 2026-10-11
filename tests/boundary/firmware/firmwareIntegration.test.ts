@@ -304,6 +304,20 @@ it.each(["depth", "dependency", "link"])(
     expect(normalized.files).toHaveLength(1);
     if (mode === "depth")
       expect(normalized.depth_limited_paths).toEqual(["$output/rootfs/config"]);
+    if (mode === "depth")
+      expect(normalized.extraction_gaps).toEqual([
+        {
+          kind: "depth-limited",
+          input_path: "$output/rootfs/config",
+          relative_path: null,
+          handler: null,
+          provider_id: null,
+          range: null,
+          root_file_range: null,
+          dependencies: [],
+          continuation: expect.stringContaining("max_depth"),
+        },
+      ]);
     if (mode === "dependency")
       expect(normalized.diagnostics).toEqual([
         {
@@ -315,12 +329,39 @@ it.each(["depth", "dependency", "link"])(
           },
         },
       ]);
+    if (mode === "dependency")
+      expect(normalized.extraction_gaps).toEqual([
+        {
+          kind: "missing-extractor-dependency",
+          input_path: "$input",
+          relative_path: null,
+          handler: "gzip",
+          provider_id: "gzip-id",
+          range: { offset: 0, length: 18 },
+          root_file_range: { offset: 0, length: 18 },
+          dependencies: ["sasquatch"],
+          continuation: expect.stringContaining("installs nothing"),
+        },
+      ]);
     if (mode === "link") {
       expect(normalized.unpublished_entries).toEqual([
         {
           relative_path: "escape",
           kind: "symlink",
           link_target: "/etc/passwd",
+        },
+      ]);
+      expect(normalized.extraction_gaps).toEqual([
+        {
+          kind: "unpublished-entry",
+          input_path: "$output/escape",
+          relative_path: "escape",
+          handler: null,
+          provider_id: null,
+          range: null,
+          root_file_range: null,
+          dependencies: [],
+          continuation: expect.stringContaining("metadata"),
         },
       ]);
       await expect(access(`${fixture.output}/escape`)).rejects.toMatchObject({

@@ -94,6 +94,27 @@ const chunk = z.strictObject({
   encrypted: z.boolean().nullable(),
   root_file_range: range.nullable(),
 });
+/** One explicit unextracted or retained-as-carved region, with the supported
+ * continuation that uses already configured capabilities when one exists. */
+export const extractionGap = z.strictObject({
+  kind: z.enum([
+    "missing-extractor-dependency",
+    "unknown-chunk-handler",
+    "encrypted-chunk",
+    "depth-limited",
+    "unpublished-entry",
+  ]),
+  /** Logical task path from the producer report; `$output/…` for unpublished entries. */
+  input_path: z.string(),
+  relative_path: z.string().nullable(),
+  handler: z.string().nullable(),
+  provider_id: z.string().nullable(),
+  range: range.nullable(),
+  root_file_range: range.nullable(),
+  /** Extractor executables named by the producer; empty when it named none. */
+  dependencies: z.array(z.string()),
+  continuation: z.string(),
+});
 
 /** Completed firmware result retained when private-runtime cleanup cannot be confirmed. */
 export interface FirmwarePartialObservation {
@@ -158,6 +179,7 @@ export const firmwareResultSchemas = {
     ),
     depth_limited_paths: z.array(z.string()),
     diagnostics: z.array(jsonValueSchema),
+    extraction_gaps: z.array(extractionGap),
     published_bytes: bytes,
   }),
 } as const;

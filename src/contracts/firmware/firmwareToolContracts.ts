@@ -30,7 +30,7 @@ export const FIRMWARE_TOOL_CONTRACTS = [
     ...toolContractMetadata("extract_firmware"),
     kind: "firmware-provider",
     description:
-      "Extract caller-selected firmware bytes with Unblob 26.6.x (verified with 26.6.4) into an absent output directory. Returns verified child paths/digests, task derivations, unknown chunks and extraction diagnostics inline. Preserves the default sandbox; publishes regular files only. Linux, caller-supplied tool, format-specific extractors and util-linux prlimit required. No mounts or extracted-code execution. Select a returned native file with open_binary for Ghidra analysis; decompressed offsets are not original-file addresses.",
+      "Extract caller-selected firmware bytes with Unblob 26.6.x (verified with 26.6.4) into an absent output directory. Returns verified child paths/digests, task derivations, unknown chunks, extraction diagnostics and explicit extraction_gaps rows naming unextracted regions, missing extractor dependencies and the supported continuation for each. Preserves the default sandbox; publishes regular files only. Linux, caller-supplied tool, format-specific extractors and util-linux prlimit required. No mounts or extracted-code execution. Select a returned native file with open_binary for Ghidra analysis; decompressed offsets are not original-file addresses.",
     inputSchema: firmwareInputSchemas.extract_firmware,
     outputSchema: evidenceResultOf(firmwareResultSchemas.extract_firmware),
     examples: [

@@ -289,6 +289,99 @@ describe("Ghidra configured import language and seeds", () => {
   });
 });
 
+describe("Ghidra disabled analyzers", () => {
+  const base = {
+    platform: "darwin" as const,
+    projectRoot: "/tmp/project",
+    targetPath: "/tmp/target",
+    bridgeScriptPath: "/package/bridge/ReaGhidraBridge.java",
+    descriptorPath: "/tmp/session.json",
+    ghidraLogPath: "/tmp/ghidra.log",
+    scriptLogPath: "/tmp/script.log",
+  };
+
+  it("applies the analyzer options after seeds and before analysis scripts", () => {
+    const arguments_ = ghidraHeadlessArguments({
+      ...base,
+      dosCom: true,
+      seedPath: posix.join("/tmp/runtime/seeds", "seeds.tsv"),
+      disabledAnalyzers: [
+        "Objective-C Message Analyzer",
+        "Decompiler Switch Analysis",
+      ],
+    });
+    const options = arguments_.indexOf(
+      posix.join("/package/bridge", "ReaGhidraAnalysisOptions.java"),
+    );
+    expect(arguments_[options - 1]).toBe("-preScript");
+    expect(arguments_[options + 1]).toBe(
+      "Objective-C Message Analyzer,Decompiler Switch Analysis",
+    );
+    const prepare = arguments_.indexOf(
+      posix.join("/package/bridge", "ReaGhidraPrepareCom.java"),
+    );
+    const seeds = arguments_.indexOf(
+      posix.join("/package/bridge", "ReaGhidraApplySeeds.java"),
+    );
+    expect(prepare).toBeLessThan(seeds);
+    expect(seeds).toBeLessThan(options);
+    expect(options).toBeLessThan(arguments_.indexOf("-postScript"));
+  });
+
+  it.each(["darwin", "win32"] as const)(
+    "uses the target platform's script path for the options script on %s",
+    (platform) => {
+      const path = platform === "win32" ? win32 : posix;
+      const arguments_ = ghidraHeadlessArguments({
+        ...base,
+        platform,
+        bridgeScriptPath: path.join(
+          "/package",
+          "bridge",
+          "ReaGhidraBridge.java",
+        ),
+        disabledAnalyzers: ["Objective-C Message Analyzer"],
+      });
+      const options = arguments_.indexOf(
+        path.join("/package", "bridge", "ReaGhidraAnalysisOptions.java"),
+      );
+      expect(arguments_[options - 1]).toBe("-preScript");
+      expect(arguments_[options + 1]).toBe("Objective-C Message Analyzer");
+      expect(options).toBeLessThan(arguments_.indexOf("-postScript"));
+    },
+  );
+
+  it("keeps the invocation byte-identical without an override", () => {
+    expect(ghidraHeadlessArguments(base)).toEqual([
+      "/tmp/project",
+      "rea-project",
+      "-import",
+      "/tmp/target",
+      "-readOnly",
+      "-deleteProject",
+      "-log",
+      "/tmp/ghidra.log",
+      "-scriptlog",
+      "/tmp/script.log",
+      "-scriptPath",
+      "/package/bridge",
+      "-postScript",
+      "/package/bridge/ReaGhidraNoReturnFix.java",
+      "-postScript",
+      "/package/bridge/ReaGhidraBridge.java",
+      "/tmp/session.json",
+    ]);
+  });
+
+  it("adds no analyzer script for an empty override", () => {
+    expect(
+      ghidraHeadlessArguments({ ...base, disabledAnalyzers: [] }),
+    ).not.toContain(
+      posix.join("/package/bridge", "ReaGhidraAnalysisOptions.java"),
+    );
+  });
+});
+
 describe("Ghidra Windows launcher", () => {
   it("keeps analysis repair outside Windows P0 authority", () => {
     const args = ghidraHeadlessArguments({

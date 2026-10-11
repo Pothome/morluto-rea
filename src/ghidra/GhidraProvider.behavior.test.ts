@@ -23,6 +23,7 @@ import { parseExecutableHeader } from "../domain/binaryTarget.js";
 import { GhidraProvider } from "./GhidraProvider.js";
 import type { GhidraTargetSnapshot } from "./GhidraClient.js";
 import type { GhidraProviderClientFactory } from "./GhidraProviderClient.js";
+import type { GhidraHeadlessLauncher } from "./GhidraLauncher.js";
 import type { GhidraInstallationHost } from "./GhidraInstallation.js";
 import { GHIDRA_SESSION_CAPABILITIES } from "./GhidraSessionValues.js";
 import { err, ok } from "../domain/result.js";
@@ -1806,6 +1807,155 @@ describe("Ghidra analysis seeds and configured language", () => {
       ).createClient(target, resolved.value.profile);
       const failed = await client.execute("health", {});
       expect(failed.ok).toBe(false);
+      expect(starts).toBe(0);
+    }
+  });
+});
+
+describe("Ghidra disabled analyzer options", () => {
+  const configuredProvider = (
+    environment: Record<string, string>,
+    clientFactory?: GhidraProviderClientFactory,
+  ) => {
+    const config = parseConfig({ GHIDRA_INSTALL_DIR: INSTALL, ...environment });
+    if (!config.ok) throw config.error;
+    return new GhidraProvider(
+      config.value,
+      silentLogger,
+      {},
+      installationHost(),
+      clientFactory,
+    );
+  };
+
+  it("records the configured analyzer options in the analysis profile", async () => {
+    const ghidra = configuredProvider({
+      REA_GHIDRA_DISABLED_ANALYZERS:
+        "Objective-C Message Analyzer,Decompiler Switch Analysis",
+    });
+    const resolved = await ghidra.resolveAnalysisProfile(
+      executableTarget("elf", "x86_64"),
+    );
+    if (!resolved.ok || resolved.value.profile === null)
+      throw new Error("expected a bound Ghidra profile");
+    expect(resolved.value.profile.parameters).toMatchObject({
+      analyzer_preset:
+        "ghidra-default+disabled:Objective-C Message Analyzer,Decompiler Switch Analysis",
+      analysis_options: {
+        disabled_analyzers: [
+          "Objective-C Message Analyzer",
+          "Decompiler Switch Analysis",
+        ],
+      },
+    });
+  });
+
+  it("hands the configured analyzers to the launcher for a matching profile", async () => {
+    const launchers: GhidraHeadlessLauncher[] = [];
+    const ghidra = configuredProvider(
+      { REA_GHIDRA_DISABLED_ANALYZERS: "Objective-C Message Analyzer" },
+      (options) => {
+        launchers.push(options.launcher as GhidraHeadlessLauncher);
+        return {
+          start: () => Promise.resolve(ok(sessionInfo())),
+          callTool: () => Promise.resolve(ok(null)),
+          close: () => Promise.resolve(ok(null)),
+        };
+      },
+    );
+    const target = executableTarget("elf", "x86_64");
+    const resolved = await ghidra.resolveAnalysisProfile(target);
+    if (!resolved.ok || resolved.value.profile === null)
+      throw new Error("expected a bound Ghidra profile");
+    const client = ghidra.createClient(target, resolved.value.profile);
+    const health = await client.execute("health", {});
+    expect(health.ok).toBe(true);
+    expect(launchers).toHaveLength(1);
+    expect(launchers[0]?.options.disabledAnalyzers).toEqual([
+      "Objective-C Message Analyzer",
+    ]);
+  });
+
+  it("binds analyzer overrides and raw import settings in one profile", async () => {
+    const launchers: GhidraHeadlessLauncher[] = [];
+    const ghidra = configuredProvider(
+      { REA_GHIDRA_DISABLED_ANALYZERS: "Decompiler Switch Analysis" },
+      (options) => {
+        launchers.push(options.launcher as GhidraHeadlessLauncher);
+        return {
+          start: () => Promise.resolve(ok(sessionInfo())),
+          callTool: () => Promise.resolve(ok(null)),
+          close: () => Promise.resolve(ok(null)),
+        };
+      },
+    );
+    const target: BinaryTarget = {
+      path: "/tmp/entry.bin",
+      sha256: "a".repeat(64),
+      kind: "executable",
+      format: "raw-binary",
+      architecture: "x86",
+      availableArchitectures: ["x86"],
+      entryPoint: "0x1000",
+      entryPointSource: "0x1000",
+    };
+    const resolved = await ghidra.resolveAnalysisProfile(target);
+    if (!resolved.ok || resolved.value.profile === null)
+      throw new Error("expected a bound raw-binary profile");
+    expect(resolved.value.profile.parameters).toMatchObject({
+      target_format: "raw-binary",
+      entry_point: "0x1000",
+      analyzer_preset: "ghidra-default+disabled:Decompiler Switch Analysis",
+      analysis_options: { disabled_analyzers: ["Decompiler Switch Analysis"] },
+    });
+    const client = ghidra.createClient(target, resolved.value.profile);
+    expect(launchers).toHaveLength(1);
+    expect(launchers[0]?.options).toMatchObject({
+      disabledAnalyzers: ["Decompiler Switch Analysis"],
+      rawBinary: {
+        languageId: "x86:LE:32:default",
+        compilerSpecId: "gcc",
+        baseAddr: "0x1000",
+      },
+    });
+    await client.close();
+  });
+
+  it("refuses a profile resolved without or with other analyzer options", async () => {
+    const target = executableTarget("elf", "x86_64");
+    const plainProvider = configuredProvider({});
+    const plain = await plainProvider.resolveAnalysisProfile(target);
+    if (!plain.ok || plain.value.profile === null)
+      throw new Error("expected profile");
+    const configuredProvider2 = configuredProvider({
+      REA_GHIDRA_DISABLED_ANALYZERS: "Objective-C Message Analyzer",
+    });
+    const configured = await configuredProvider2.resolveAnalysisProfile(target);
+    if (!configured.ok || configured.value.profile === null)
+      throw new Error("expected configured profile");
+    for (const [profile, environment] of [
+      [
+        plain.value.profile,
+        { REA_GHIDRA_DISABLED_ANALYZERS: "Objective-C Message Analyzer" },
+      ],
+      [configured.value.profile, {}],
+      [
+        configured.value.profile,
+        { REA_GHIDRA_DISABLED_ANALYZERS: "Decompiler Switch Analysis" },
+      ],
+    ] as const) {
+      let starts = 0;
+      const client = configuredProvider(environment, () => ({
+        start: () => {
+          starts++;
+          return Promise.resolve(ok(sessionInfo()));
+        },
+        callTool: () => Promise.resolve(ok(null)),
+        close: () => Promise.resolve(ok(null)),
+      })).createClient(target, profile);
+      const failed = await client.execute("health", {});
+      expect(failed.ok).toBe(false);
+      if (!failed.ok) expect(failed.error._tag).toBe("ProviderAdapterError");
       expect(starts).toBe(0);
     }
   });

@@ -8,11 +8,11 @@ describe("raw-binary Ghidra language binding", () => {
   it("maps the four admitted families to little-endian generic languages", () => {
     expect(ghidraRawBinaryLanguage("x86")).toEqual({
       languageId: "x86:LE:32:default",
-      compilerSpecId: "default",
+      compilerSpecId: "gcc",
     });
     expect(ghidraRawBinaryLanguage("x86_64")).toEqual({
       languageId: "x86:LE:64:default",
-      compilerSpecId: "default",
+      compilerSpecId: "gcc",
     });
     expect(ghidraRawBinaryLanguage("arm")).toEqual({
       languageId: "ARM:LE:32:v7",

@@ -42,11 +42,66 @@ try {
       "",
     ].join("\n"),
   );
+  const output = await runHeadless(target, "seed-regression", [
+    "-postScript",
+    "ReaSeedRegressionProbe.java",
+    seeds,
+  ]);
+  // Headless can exit zero after a script fails, so require the probe's marker.
+  assert.ok(output.includes("REA_SEED_REGRESSION_OK "), output);
+
+  const analyzer = "Decompiler Switch Analysis";
+  const disabled = await runHeadless(target, "analyzer-regression-valid", [
+    "-preScript",
+    "ReaGhidraAnalysisOptions.java",
+    analyzer,
+    "-postScript",
+    "ReaAnalyzerOptionsRegressionProbe.java",
+    analyzer,
+  ]);
+  assert.ok(
+    disabled.includes(`REA_ANALYZER_OPTIONS_DISABLED_OK ${analyzer}`),
+    disabled,
+  );
+
+  const unknownAnalyzer = "REA Unknown Analyzer";
+  const rejected = await runHeadless(target, "analyzer-regression-unknown", [
+    "-preScript",
+    "ReaGhidraAnalysisOptions.java",
+    `${analyzer},${unknownAnalyzer}`,
+    "-postScript",
+    "ReaAnalyzerOptionsRegressionProbe.java",
+    analyzer,
+  ]);
+  assert.ok(
+    rejected.includes(
+      `Unknown Ghidra analyzer for this program: ${unknownAnalyzer}`,
+    ),
+    rejected,
+  );
+  assert.ok(
+    rejected.includes("Processing aborted as a result of pre-script."),
+    rejected,
+  );
+  assert.ok(!rejected.includes("REA_ANALYZER_OPTIONS_DISABLED_OK"), rejected);
+} finally {
+  if (supervisor !== undefined) {
+    const stopped = await supervisor.stop();
+    assert.notEqual(stopped.status, "incomplete", JSON.stringify(stopped));
+    supervisor.dispose();
+  }
+  await rm(workspace, { recursive: true, force: true });
+}
+console.log(
+  "Real Ghidra pre-script regression passed: descending function order, out-of-range seed, BSS label, BSS code rejection, analyzer option readback, unknown-analyzer abort before post-scripts, and owned-process cleanup.",
+);
+
+async function runHeadless(target, project, scriptArguments) {
   const launch = await spawnOwnedProviderProcess({
     command: join(installation, "support", "analyzeHeadless"),
     arguments: [
       workspace,
-      "seed-regression",
+      project,
       "-import",
       target,
       "-loader",
@@ -63,9 +118,7 @@ try {
           new URL("../../../tests/conformance/ghidra", import.meta.url),
         ),
       ].join(";"),
-      "-postScript",
-      "ReaSeedRegressionProbe.java",
-      seeds,
+      ...scriptArguments,
     ],
     runId: run.run_id,
     expectedCommand: null,
@@ -82,16 +135,9 @@ try {
   const snapshot = supervisor.snapshot();
   const output = `${snapshot.stdout.text}\n${snapshot.stderr.text}`;
   assert.equal(snapshot.exitCode, 0, output);
-  // Headless can exit zero after a script fails, so require the probe's marker.
-  assert.ok(output.includes("REA_SEED_REGRESSION_OK "), output);
-} finally {
-  if (supervisor !== undefined) {
-    const stopped = await supervisor.stop();
-    assert.notEqual(stopped.status, "incomplete", JSON.stringify(stopped));
-    supervisor.dispose();
-  }
-  await rm(workspace, { recursive: true, force: true });
+  const stopped = await supervisor.stop();
+  assert.notEqual(stopped.status, "incomplete", JSON.stringify(stopped));
+  supervisor.dispose();
+  supervisor = undefined;
+  return output;
 }
-console.log(
-  "Real Ghidra seed regression passed: descending function order, out-of-range seed, BSS label, BSS code rejection, and owned-process cleanup.",
-);

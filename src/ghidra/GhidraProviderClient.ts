@@ -14,7 +14,9 @@ import {
   ghidraSeedLimitations,
 } from "./GhidraAnalysisSeeds.js";
 import {
+  ghidraProfileDisabledAnalyzers,
   ghidraProfileLanguageOverride,
+  sameGhidraDisabledAnalyzers,
   sameGhidraLanguageOverride,
 } from "./GhidraAnalysisProfile.js";
 import type { AnalysisProfileCommitment } from "../domain/analysisProfile.js";
@@ -431,6 +433,23 @@ export const createGhidraProviderClient = (input: {
         },
       }),
     );
+  const disabledAnalyzers = ghidraProfileDisabledAnalyzers(
+    committedProfile.parameters,
+  );
+  if (
+    !sameGhidraDisabledAnalyzers(
+      disabledAnalyzers,
+      config.ghidraDisabledAnalyzers,
+    )
+  )
+    return unavailableClient(
+      new ProviderAdapterError("ghidra", "open_binary", {
+        diagnostics: {
+          reason:
+            "The committed analysis profile and REA_GHIDRA_DISABLED_ANALYZERS differ; reopen the target to resolve a new profile.",
+        },
+      }),
+    );
   const invalidProfile = validateGhidraExtensionProfile(
     extensions,
     config,
@@ -501,6 +520,9 @@ export const createGhidraProviderClient = (input: {
             },
           }),
       ...(languageOverride === undefined ? {} : { languageOverride }),
+      ...(config.ghidraDisabledAnalyzers === undefined
+        ? {}
+        : { disabledAnalyzers: config.ghidraDisabledAnalyzers }),
       ...(seeds === undefined ? {} : { analysisSeeds: seeds }),
       platform: installation.platform,
       ...(extensions.length === 0 ? {} : { analysisExtensions: extensions }),

@@ -35,14 +35,18 @@ Omitted `format` keeps header-based detection; architecture and entry without
 `format=raw-binary` are rejected.
 
 Ghidra imports a private snapshot with `BinaryLoader` and these little-endian
-generic languages:
+generic languages and compiler specifications:
 
-| architecture | language_id         |
-| ------------ | ------------------- |
-| x86          | `x86:LE:32:default` |
-| x86_64       | `x86:LE:64:default` |
-| arm          | `ARM:LE:32:v7`      |
-| arm64        | `AARCH64:LE:64:v8A` |
+| architecture | language_id         | compiler_spec_id |
+| ------------ | ------------------- | ---------------- |
+| x86          | `x86:LE:32:default` | `gcc`            |
+| x86_64       | `x86:LE:64:default` | `gcc`            |
+| arm          | `ARM:LE:32:v7`      | `default`        |
+| arm64        | `AARCH64:LE:64:v8A` | `default`        |
+
+Compiler specifications select analysis conventions; they do not identify the
+original compiler or ABI of a headerless target. Ghidra's x86 languages do not
+provide a compiler specification named `default`.
 
 Those settings, the caller-supplied entry, and `language_selection:
 caller-supplied-v1` are committed in the analysis profile. A different entry

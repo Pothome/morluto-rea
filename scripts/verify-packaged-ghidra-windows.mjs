@@ -172,11 +172,13 @@ const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const runtimeParent = join(workspace, "runtime with spaces");
 await mkdir(runtimeParent);
 const callerDirectory = join(workspace, "caller cwd with spaces");
+// Keep sorted for comparison with the final caller-directory listing.
 const scriptCollisions = [
-  "ReaGhidraBridge.java",
-  "ReaGhidraPrepareCom.java",
+  "ReaGhidraAnalysisOptions.java",
   "ReaGhidraApplySeeds.java",
+  "ReaGhidraBridge.java",
   "ReaGhidraNoReturnFix.java",
+  "ReaGhidraPrepareCom.java",
   "ReaGhidraPrepareRaw.java",
 ];
 await mkdir(callerDirectory);

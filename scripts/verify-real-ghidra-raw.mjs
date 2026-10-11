@@ -53,6 +53,15 @@ const env = {
   ...(process.env.JAVA_HOME === undefined
     ? {}
     : { JAVA_HOME: process.env.JAVA_HOME }),
+  ...(process.env.GHIDRA_HEADLESS_MAXMEM === undefined
+    ? {}
+    : { GHIDRA_HEADLESS_MAXMEM: process.env.GHIDRA_HEADLESS_MAXMEM }),
+  ...(process.env.REA_GHIDRA_DISABLED_ANALYZERS === undefined
+    ? {}
+    : {
+        REA_GHIDRA_DISABLED_ANALYZERS:
+          process.env.REA_GHIDRA_DISABLED_ANALYZERS,
+      }),
 };
 const transport = new StdioClientTransport({
   command: process.execPath,
@@ -160,6 +169,48 @@ try {
   assert.equal(cli.normalized_result.base_address, "0x8000000");
   assert.equal(cli.analysis_profile.digest, profiles[0]);
   assert.deepEqual(await readFile(path), bytes);
+  const x86Targets = [];
+  for (const architecture of ["x86", "x86_64"]) {
+    const x86Bytes = Buffer.from("b82a000000c3", "hex"); // mov eax, 42; ret.
+    const x86Sha256 = createHash("sha256").update(x86Bytes).digest("hex");
+    const x86Path = join(workspace, `${architecture}.bin`);
+    await writeFile(x86Path, x86Bytes);
+    await call("open_binary", {
+      path: x86Path,
+      format: "raw-binary",
+      architecture,
+      entry_point: "0x1000",
+    });
+    const image = await call("inspect_native_load_image", {}, x86Sha256);
+    assert.equal(
+      image.normalized_result.status,
+      "verified",
+      JSON.stringify(image),
+    );
+    assert.equal(image.normalized_result.base_address, "0x1000");
+    assert.equal(image.normalized_result.observations.compiler_spec_id, "gcc");
+    assert.equal(image.analysis_profile.parameters.compiler_spec_id, "gcc");
+    const memory = await call(
+      "read_bytes",
+      { address: "0x1000", length: x86Bytes.length },
+      x86Sha256,
+    );
+    assert.equal(memory.normalized_result.bytes_hex, x86Bytes.toString("hex"));
+    const pseudo = await call(
+      "procedure_pseudo_code",
+      { procedure: "0x1000" },
+      x86Sha256,
+    );
+    assert.match(pseudo.normalized_result, /\b(?:42|0x2a)\b/iu);
+    await call("close_binary");
+    assert.deepEqual(await readFile(x86Path), x86Bytes);
+    x86Targets.push({
+      architecture,
+      sha256: x86Sha256,
+      compiler_spec_id: "gcc",
+      return_42: true,
+    });
+  }
   report = {
     ok: true,
     mocked: false,
@@ -179,6 +230,7 @@ try {
     invalid_entry_preserves_active_session: true,
     load_images_verified: true,
     original_unchanged: true,
+    x86_targets: x86Targets,
   };
 } catch (error) {
   if (stderr.trim()) process.stderr.write(stderr);
@@ -199,7 +251,7 @@ process.stdout.write(
   }) + "\n",
 );
 
-async function call(name, args = {}) {
+async function call(name, args = {}, targetSha256 = sha256) {
   const result = await client.callTool(
     { name, arguments: args },
     { timeout: 240000 },
@@ -213,7 +265,7 @@ async function call(name, args = {}) {
   )
     return projected;
   const evidence = parseEvidence(result.structuredContent);
-  assert.equal(evidence.subject.digest.sha256, sha256);
+  assert.equal(evidence.subject.digest.sha256, targetSha256);
   assert.equal(evidence.subject.format, "raw-binary");
   return evidence;
 }

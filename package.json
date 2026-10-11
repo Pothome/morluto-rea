@@ -54,6 +54,7 @@
     "bridge/ghidra/ReaGhidraExtensions.java",
     "bridge/ghidra/ReaGhidraPrepareCom.java",
     "bridge/ghidra/ReaGhidraApplySeeds.java",
+    "bridge/ghidra/ReaGhidraAnalysisOptions.java",
     "bridge/ghidra/ReaGhidraNoReturnFix.java",
     "bridge/ghidra/ReaGhidraPrepareRaw.java",
     "bridge/android/ReaJadxBridge.java",

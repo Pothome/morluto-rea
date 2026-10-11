@@ -36,7 +36,12 @@ bridge-reported `language_id` after import. A caller-selected
 `REA_GHIDRA_LANGUAGE_ID`/`REA_GHIDRA_COMPILER_SPEC_ID` still wins over the
 pin; combining the pinned profile with an environment override is a typed
 refusal. A header that declares an ABI field but carries no record is still
-refused.
+refused. Two further boundaries apply: an inspection that could not examine
+every ABI declaration source (for example a carved ELF whose section table
+extends past the captured bytes without a program-header record) does not
+establish the recordless admission, and an `EF_MIPS_ARCH_32` header that
+_declares_ an ABI is refused rather than relabeled, because the declared-ABI
+lane is verified for `EF_MIPS_ARCH_32R2` headers only.
 
 Explicit `EF_MIPS_FP64` and `EF_MIPS_NAN2008` declarations are refused. Their
 absence is insufficient: Clang can emit identical `e_flags` for FP32, FP64 and

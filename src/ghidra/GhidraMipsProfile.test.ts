@@ -194,10 +194,22 @@ describe("recordless legacy MIPS32 admission", () => {
 
   it.each([
     [{ flags: 0x50000021 }, "n32"],
-    [{ flags: 0x50001001 }, "inspected ABI"],
+    [
+      { flags: 0x50001001 },
+      "EF_MIPS_ARCH_32R2 for headers that declare an ABI",
+    ],
     [{ flags: 0x50000201 }, "EF_MIPS_FP64"],
     [{ flags: 0x50000401 }, "EF_MIPS_NAN2008"],
     [{ flags: 0x60000001 }, "32R2"],
+    [
+      {
+        flags: 0x50000001,
+        limitations: [
+          "MIPS section header table at file offset 96 extends beyond the captured file: examined 2 of 5 complete headers. ABI declarations in unavailable headers remain unknown.",
+        ],
+      },
+      "complete ABI-record inspection",
+    ],
   ] satisfies [Partial<MipsElfMetadata>, string][])(
     "keeps refusing unverified recordless variants %j",
     (change, reason) => {

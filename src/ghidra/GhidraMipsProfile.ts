@@ -17,15 +17,17 @@ export const isLegacyMipsAdmission = (target: BinaryTarget): boolean => {
     target.mips === undefined
   )
     return false;
-  const { flags, abiFlags } = target.mips;
+  const { flags, abiFlags, limitations } = target.mips;
   const arch = flags & 0xf0000000;
   return (
     (arch === 0x50000000 || arch === 0x70000000) &&
     (flags & 0x0000f000) === 0 &&
     (flags & 0x20) === 0 &&
     // Undefined means the record was not inspected; only an inspected
-    // absence establishes the recordless legacy admission.
-    abiFlags === null
+    // absence establishes the recordless legacy admission. An inspection
+    // that could not examine every declaration source stays unknown.
+    abiFlags === null &&
+    (limitations === undefined || limitations.length === 0)
   );
 };
 
@@ -49,18 +51,30 @@ export const ghidraMipsUnsupportedReason = (
   const arch = metadata.flags & 0xf0000000;
   if (arch !== 0x70000000 && arch !== 0x50000000)
     return "This Ghidra MIPS lane requires EF_MIPS_ARCH_32R2 or a recordless legacy EF_MIPS_ARCH_32 header; other ISA revisions need separate verification.";
-  if (isLegacyMipsAdmission(target)) {
+  const recordlessShape =
+    (metadata.flags & 0x0000f000) === 0 &&
+    (metadata.flags & 0x20) === 0 &&
+    metadata.abiFlags === null;
+  if (recordlessShape) {
     if ((metadata.flags & 0x00000200) !== 0)
       return "EF_MIPS_FP64 requires separate verification of 64-bit floating-point register semantics in this Ghidra lane.";
     if ((metadata.flags & 0x00000400) !== 0)
       return "EF_MIPS_NAN2008 requires separate verification of NaN encoding semantics in this Ghidra lane.";
-    return null;
+    if (isLegacyMipsAdmission(target)) return null;
+    // The inspection could not examine every ABI declaration source, so the
+    // recordless admission is not established for this header.
+    return [
+      "This recordless legacy admission requires a complete ABI-record inspection; ABI declarations in unavailable headers remain unknown.",
+      ...(metadata.limitations ?? []),
+    ].join(" ");
   }
   if (
     (metadata.flags & 0x0000f000) !== 0x00001000 ||
     (metadata.flags & 0x20) !== 0
   )
     return "This Ghidra MIPS lane requires an explicit o32 ABI or a recordless legacy header with an unspecified ABI; n32, EABI and mixed declarations remain unsupported.";
+  if (arch !== 0x70000000)
+    return "This Ghidra MIPS lane requires EF_MIPS_ARCH_32R2 for headers that declare an ABI; EF_MIPS_ARCH_32 headers are admitted only through the recordless legacy admission.";
   if ((metadata.flags & 0x00000200) !== 0)
     return "EF_MIPS_FP64 requires separate verification of 64-bit floating-point register semantics in this Ghidra lane.";
   if ((metadata.flags & 0x00000400) !== 0)

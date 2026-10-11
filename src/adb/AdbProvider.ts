@@ -1157,6 +1157,23 @@ export class AdbProvider {
     );
     if (!paths.ok) return paths;
     const parsed = parsePmPathOutput(paths.value.stdout);
+    // Rejected paths win over the empty/unparsed checks: a listing whose only
+    // entry is unsafe is hostile output, not package absence, and the error
+    // must carry the raw path and the captured output as evidence.
+    const rejected = parsed.rejectedPaths[0];
+    if (rejected !== undefined)
+      return err(
+        new AnalysisProtocolError(
+          `pm path reported an APK path whose file name cannot be used on the host: ${JSON.stringify(rejected.device_path)} (${rejected.reason}); no APK was pulled`,
+          {
+            capturedOutput: {
+              stdout: paths.value.stdout,
+              stderr: paths.value.stderr,
+              truncated: false,
+            },
+          },
+        ),
+      );
     if (parsed.paths.length === 0 && parsed.unparsedLines.length === 0)
       return err(
         new AnalysisUnsupportedTargetError(

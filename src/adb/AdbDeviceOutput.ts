@@ -211,28 +211,81 @@ const fileNameOf = (devicePath: string): string => {
 };
 
 /**
+ * Host file names REA writes pulled APKs under. Package Manager names APKs
+ * `base.apk`, `split_*.apk`, or a system module name; anything else, including
+ * dot segments, separators, and control characters, could escape or alias the
+ * package output directory when joined on the host.
+ */
+const SAFE_HOST_APK_FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*\.apk$/u;
+
+/**
+ * Whitespace or control characters anywhere in a device path. Package Manager
+ * never emits them, and keeping them would make the retained path differ from
+ * what a trimmed or terminal-rendered copy shows.
+ */
+const DEVICE_PATH_WHITESPACE_OR_CONTROL = /[\s\p{Cc}]/u;
+
+/** Why a device-reported APK path cannot be pulled under a host file name. */
+const unsafeDevicePathReason = (
+  devicePath: string,
+  fileName: string,
+): string | undefined => {
+  if (DEVICE_PATH_WHITESPACE_OR_CONTROL.test(devicePath))
+    return "the path contains whitespace, NUL, or control characters";
+  if (fileName === "") return "the path has no final file name segment";
+  if (fileName === "." || fileName === "..")
+    return "the final segment is a dot segment";
+  if (fileName.includes("\\")) return "the file name contains a path separator";
+  if (!SAFE_HOST_APK_FILE_NAME.test(fileName))
+    return "the file name is not of the form [A-Za-z0-9][A-Za-z0-9._-]*.apk";
+  return undefined;
+};
+
+/** One `pm path` APK whose file name REA refuses to use on the host. */
+export interface AdbRejectedPackagePath {
+  /** Raw device path exactly as Package Manager reported it. */
+  readonly device_path: string;
+  readonly file_name: string;
+  readonly reason: string;
+}
+
+/**
  * Parse `pm path PACKAGE` lines. The base/split role is derived from the file
  * name (`base.apk`, `split_*.apk`), which is the only signal the output
- * carries; any other name reports an unknown role.
+ * carries; any other name reports an unknown role. Only the protocol line
+ * terminator (`\n` or `\r\n`) is stripped, so each retained device path is
+ * byte-for-byte what the device reported. Paths with whitespace or control
+ * characters, and file names that are not safe host file names, are reported
+ * in `rejectedPaths` with that raw device path, never trimmed or renamed.
  */
 export const parsePmPathOutput = (
   stdout: string,
 ): {
   paths: readonly AdbPackagePathEntry[];
+  rejectedPaths: readonly AdbRejectedPackagePath[];
   unparsedLines: readonly string[];
 } => {
   const paths: AdbPackagePathEntry[] = [];
+  const rejectedPaths: AdbRejectedPackagePath[] = [];
   const unparsedLines: string[] = [];
-  for (const rawLine of stdout.split(/\r?\n/u)) {
-    const line = rawLine.trim();
-    if (line === "") continue;
-    const match = /^package:(\S+)$/u.exec(line);
+  for (const line of stdout.split(/\r?\n/u)) {
+    if (line.trim() === "") continue;
+    const match = /^package:(.+)$/su.exec(line);
     if (match === null) {
       unparsedLines.push(line);
       continue;
     }
     const devicePath = match[1]!;
     const fileName = fileNameOf(devicePath);
+    const unsafe = unsafeDevicePathReason(devicePath, fileName);
+    if (unsafe !== undefined) {
+      rejectedPaths.push({
+        device_path: devicePath,
+        file_name: fileName,
+        reason: unsafe,
+      });
+      continue;
+    }
     paths.push({
       device_path: devicePath,
       file_name: fileName,
@@ -244,5 +297,5 @@ export const parsePmPathOutput = (
             : "unknown",
     });
   }
-  return { paths, unparsedLines };
+  return { paths, rejectedPaths, unparsedLines };
 };

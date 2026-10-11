@@ -382,6 +382,7 @@ export class FirmwareProvider implements FirmwareAnalysisPort {
           entries,
           normalized,
           selection: target.selection,
+          maxDepth: request.input.max_depth,
           engine,
           signal,
           retainCleanup: (tree) => {

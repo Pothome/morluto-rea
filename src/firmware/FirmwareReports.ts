@@ -164,19 +164,39 @@ export const normalizeUnblobReport = (
   }[] = [];
   const seen = new Set<string>();
   const missingDependencies = new Map<string, Set<string>>();
+  /** Dependencies reported by one chunk's extraction, keyed with its chunk id. */
+  const chunkMissingDependencies = new Map<string, Set<string>>();
+  const dependencyNames = (reports: readonly unknown[]): readonly string[] => {
+    const names = new Set<string>();
+    for (const item of reports) {
+      const parsed = missingDependency.safeParse(item);
+      if (!parsed.success) continue;
+      for (const name of parsed.data.dependencies)
+        if (name !== "") names.add(name);
+    }
+    return [...names];
+  };
   const noteMissingDependencies = (
     path: string,
     reports: readonly unknown[],
   ): void => {
-    for (const item of reports) {
-      const parsed = missingDependency.safeParse(item);
-      if (!parsed.success) continue;
-      const names = parsed.data.dependencies.filter((name) => name !== "");
-      if (names.length === 0) continue;
-      const known = missingDependencies.get(path) ?? new Set<string>();
-      for (const name of names) known.add(name);
-      missingDependencies.set(path, known);
-    }
+    const names = dependencyNames(reports);
+    if (names.length === 0) return;
+    const known = missingDependencies.get(path) ?? new Set<string>();
+    for (const name of names) known.add(name);
+    missingDependencies.set(path, known);
+  };
+  const noteChunkMissingDependencies = (
+    path: string,
+    chunkId: string,
+    reports: readonly unknown[],
+  ): void => {
+    const names = dependencyNames(reports);
+    if (names.length === 0) return;
+    const key = JSON.stringify([path, chunkId]);
+    const known = chunkMissingDependencies.get(key) ?? new Set<string>();
+    for (const name of names) known.add(name);
+    chunkMissingDependencies.set(key, known);
   };
   for (const record of records) {
     const path = logical(record.task.path);
@@ -261,7 +281,8 @@ export const normalizeUnblobReport = (
         if (detail !== null)
           for (const problem of detail.extraction_reports) {
             diagnostics.push({ input_path: path, report: problem });
-            noteMissingDependencies(path, [problem]);
+            // Nested under one chunk: keep the owning chunk, not the whole task.
+            noteChunkMissingDependencies(path, parsed.id, [problem]);
           }
         chunks.push({
           input_path: path,
@@ -370,6 +391,21 @@ export const normalizeUnblobReport = (
           : left.input_path > right.input_path
             ? 1
             : 0,
+      ),
+    chunk_missing_dependencies: [...chunkMissingDependencies.entries()]
+      .map(([key, names]) => {
+        const [input_path, provider_id] = JSON.parse(key) as [string, string];
+        return {
+          input_path,
+          provider_id,
+          dependencies: uniqueSorted([...names]),
+        };
+      })
+      .sort((left, right) =>
+        `${left.input_path}\u0000${left.provider_id}` <
+        `${right.input_path}\u0000${right.provider_id}`
+          ? -1
+          : 0,
       ),
     coverage:
       depths.length > 0 ||

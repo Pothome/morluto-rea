@@ -42,6 +42,27 @@ const root = () => ({
   subtasks: [],
 });
 
+/** A chunk whose extraction failed on a missing dependency, when asked for it. */
+const nestedDependencyChunk = (id: string, offset: number) => ({
+  __typename__: "ChunkReport",
+  id,
+  start_offset: offset,
+  end_offset: offset + 10,
+  size: 10,
+  handler_name: `handler-${id}`,
+  is_encrypted: false,
+  extraction_reports:
+    id === "gzip-id"
+      ? [
+          {
+            __typename__: "ExtractorDependencyNotFoundReport",
+            severity: "ERROR",
+            dependencies: ["sasquatch"],
+          },
+        ]
+      : [],
+});
+
 describe("firmware producer boundaries", () => {
   it("retains unknown chunks and their selected original-file range", () => {
     const normalized = normalizeUnblobReport([root()], context);
@@ -110,6 +131,33 @@ describe("firmware producer boundaries", () => {
     );
     expect(normalized.missing_dependencies).toEqual([
       { input_path: "$output/rootfs", dependencies: ["sasquatch"] },
+    ]);
+    expect(normalized.chunk_missing_dependencies).toEqual([]);
+  });
+  it("keeps chunk-nested dependency reports bound to their owning chunk", () => {
+    const record = root();
+    const normalized = normalizeUnblobReport(
+      [
+        {
+          ...record,
+          reports: [
+            ...record.reports.filter(
+              (item) => item.__typename__ !== "UnknownChunkReport",
+            ),
+            nestedDependencyChunk("gzip-id", 0),
+            nestedDependencyChunk("other-id", 10),
+          ],
+        },
+      ],
+      context,
+    );
+    expect(normalized.missing_dependencies).toEqual([]);
+    expect(normalized.chunk_missing_dependencies).toEqual([
+      {
+        input_path: "$input",
+        provider_id: "gzip-id",
+        dependencies: ["sasquatch"],
+      },
     ]);
   });
   it("keeps dependency reports without dependency names out of the derivation", () => {

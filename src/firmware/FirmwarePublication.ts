@@ -27,6 +27,14 @@ const GAP_CONTINUATIONS: Record<ExtractionGap["kind"], string> = {
     "The entry is retained as metadata; only regular files are published, without executable permission bits.",
 };
 
+/** The depth ceiling cannot be raised past the input schema maximum. */
+const MAX_EXTRACTION_DEPTH = 10;
+
+const depthContinuation = (maxDepth: number): string =>
+  maxDepth >= MAX_EXTRACTION_DEPTH
+    ? "This extraction already ran at the lane's maximum depth; no deeper rerun is possible. Treat the region as unexamined below this path."
+    : GAP_CONTINUATIONS["depth-limited"];
+
 const emptyGap = {
   relative_path: null,
   handler: null,
@@ -50,6 +58,8 @@ export const publishFirmwareExtraction = async (context: {
   entries: readonly FirmwareEntry[];
   normalized: ReturnType<typeof normalizeUnblobReport>;
   selection: { offset: number; length: number; sha256: string };
+  /** Caller-selected extraction depth, for boundary-aware continuations. */
+  maxDepth: number;
   engine: z.infer<typeof firmwareResultSchemas.extract_firmware>["engine"];
   signal: AbortSignal;
   retainCleanup: (tree: SafeOutputTree) => void;
@@ -127,7 +137,11 @@ export const publishFirmwareExtraction = async (context: {
       derivations: context.normalized.derivations,
       depth_limited_paths: context.normalized.depth_limited_paths,
       diagnostics: context.normalized.diagnostics,
-      extraction_gaps: extractionGaps(unpublished, context.normalized),
+      extraction_gaps: extractionGaps(
+        unpublished,
+        context.normalized,
+        context.maxDepth,
+      ),
       published_bytes: files.reduce((sum, file) => sum + file.size, 0),
     });
     context.signal.throwIfAborted();
@@ -172,33 +186,82 @@ export const publishFirmwareExtraction = async (context: {
 };
 
 /** Derive explicit recovery rows from retained report facts; no new claims. */
+/** Gap rows for missing-dependency reports: chunk-nested rows keep their owning chunk. */
+const dependencyExtractionGaps = (
+  normalized: ReturnType<typeof normalizeUnblobReport>,
+): ExtractionGap[] => {
+  // Chunk-nested dependency reports name the chunk that could not extract;
+  // task-wide reports (standalone or multi-file) attach to the task.
+  const chunkDependencies = new Set(
+    normalized.chunk_missing_dependencies.map(({ input_path, provider_id }) =>
+      JSON.stringify([input_path, provider_id]),
+    ),
+  );
+  return [
+    ...normalized.chunk_missing_dependencies.flatMap(
+      ({ input_path, provider_id, dependencies }): ExtractionGap[] => {
+        const affected = normalized.chunks.find(
+          (chunk) =>
+            chunk.input_path === input_path &&
+            chunk.provider_id === provider_id,
+        );
+        return [
+          {
+            kind: "missing-extractor-dependency",
+            input_path,
+            ...emptyGap,
+            ...(affected === undefined
+              ? {}
+              : {
+                  handler: affected.handler,
+                  provider_id,
+                  range: affected.range,
+                  root_file_range: affected.root_file_range,
+                }),
+            dependencies,
+            continuation: GAP_CONTINUATIONS["missing-extractor-dependency"],
+          },
+        ];
+      },
+    ),
+    ...normalized.missing_dependencies.flatMap(
+      ({ input_path, dependencies }): ExtractionGap[] => {
+        // Chunk-specific rows already covered this task's named chunks.
+        const affected = normalized.chunks.filter(
+          (chunk) =>
+            chunk.input_path === input_path &&
+            !chunkDependencies.has(
+              JSON.stringify([chunk.input_path, chunk.provider_id]),
+            ),
+        );
+        return (affected.length === 0 ? [null] : affected).map((chunk) => ({
+          kind: "missing-extractor-dependency",
+          input_path,
+          ...emptyGap,
+          ...(chunk === null
+            ? {}
+            : {
+                handler: chunk.handler,
+                provider_id: chunk.provider_id,
+                range: chunk.range,
+                root_file_range: chunk.root_file_range,
+              }),
+          dependencies,
+          continuation: GAP_CONTINUATIONS["missing-extractor-dependency"],
+        }));
+      },
+    ),
+  ];
+};
+
 const extractionGaps = (
   unpublished: z.infer<
     typeof firmwareResultSchemas.extract_firmware
   >["unpublished_entries"],
   normalized: ReturnType<typeof normalizeUnblobReport>,
+  maxDepth: number,
 ): ExtractionGap[] => {
-  const dependencyGaps: ExtractionGap[] =
-    normalized.missing_dependencies.flatMap(({ input_path, dependencies }) => {
-      const affected = normalized.chunks.filter(
-        (chunk) => chunk.input_path === input_path,
-      );
-      return (affected.length === 0 ? [null] : affected).map((chunk) => ({
-        kind: "missing-extractor-dependency",
-        input_path,
-        ...emptyGap,
-        ...(chunk === null
-          ? {}
-          : {
-              handler: chunk.handler,
-              provider_id: chunk.provider_id,
-              range: chunk.range,
-              root_file_range: chunk.root_file_range,
-            }),
-        dependencies,
-        continuation: GAP_CONTINUATIONS["missing-extractor-dependency"],
-      }));
-    });
+  const dependencyGaps: ExtractionGap[] = dependencyExtractionGaps(normalized);
   const chunkGaps = (
     kind: ExtractionGap["kind"],
     matches: (chunk: (typeof normalized.chunks)[number]) => boolean,
@@ -223,7 +286,7 @@ const extractionGaps = (
       input_path,
       ...emptyGap,
       dependencies: [],
-      continuation: GAP_CONTINUATIONS["depth-limited"],
+      continuation: depthContinuation(maxDepth),
     })),
     ...unpublished.map((entry): ExtractionGap => ({
       kind: "unpublished-entry",

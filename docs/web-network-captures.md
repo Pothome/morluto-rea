@@ -112,6 +112,46 @@ wire fragments. Native dictionary duplicate keys have the unchanged upstream
 decoder's last-value semantics; this adapter does not claim to recover discarded
 duplicates or the original numeric spelling of parsed native floats.
 
+## Derived API surface
+
+Pass retained HAR Evidence to `inspect_analysis_view` with
+`view: {"kind":"api-surface","offset":0,"limit":50}`. Omitted offset and limit
+are 0 and 50. The view groups request lines by method, WHATWG URL origin and
+path template, sorted by origin, template and method. Query strings, fragments,
+credentials, headers and bodies are not copied into groups.
+
+| Rule       | Exact segment format                                 | Placeholder  |
+| ---------- | ---------------------------------------------------- | ------------ |
+| `numeric`  | ASCII digits only                                    | `{numeric}`  |
+| `uuid`     | RFC 9562 textual UUID, any version, case-insensitive | `{uuid}`     |
+| `hex`      | At least 32 hexadecimal digits                       | `{hex}`      |
+| `iso-date` | Valid calendar date `YYYY-MM-DD`                     | `{iso-date}` |
+
+Rules apply in table order to the recorded, still-encoded request path, read
+before WHATWG dot-segment removal, so `/a/%2e%2e/admin` and `/admin` stay distinct. Segment indexes start
+at zero after the leading slash. Each matched segment lists its observed literals
+and `basis: "inferred"`. A page with a match has inferred Evidence; a page with
+only literal groups has derived Evidence. Version prefixes, short opaque IDs
+and digit-bearing route names stay literal. No cross-sample merging occurs.
+
+Groups cite parent record ordinals and distinct statuses and MIME types (without
+parameters). Flags report single samples, mixed statuses or mixed content types.
+`coverage` pages groups; `records` separately reports examined, total and excluded
+parent records. Ordinal subsets carry a limitation. Null URLs are excluded as
+`url-redacted`; unparseable URLs or URLs without an origin as `url-unparseable`.
+Unavailable request objects or methods are explicitly excluded. Unavailable
+response fields, including HAR's `status: 0` and an empty `mimeType`, remain
+unknown, not invented statuses or MIME types.
+
+The view makes no handler-identity, schema or causality claim. It performs no
+network activity. Native mitmproxy captures return a typed unsupported error.
+Parents inspected with `sensitive_values`, or whose Evidence does not record
+`sensitive_value_count`, also return a typed unsupported error: the view writes
+path templates and limitation text that it cannot check against declarations
+the parent does not retain. Retained templated segments are budgeted against the
+96 MiB reply budget and return `resource_constraint` when exceeded; literal
+segments are not charged.
+
 ## Resource and lifecycle boundaries
 
 Complete evidence has a 32 MiB input, 96 MiB decoder reply and 64-level nesting

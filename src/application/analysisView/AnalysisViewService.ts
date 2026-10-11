@@ -55,6 +55,7 @@ export const inspectAnalysisViewValidated = (
       operation: parent.operation,
       normalizedResult: parent.normalized_result,
       limitations: parent.limitations,
+      parameters: parent.parameters,
       artifact:
         parent.subject === null
           ? null
@@ -176,7 +177,11 @@ const createAnalysisViewEvidence = (
     },
     result: jsonValueSchema.parse(result),
     rawResult: null,
-    confidence: "derived",
+    confidence:
+      result.kind === "api-surface" &&
+      result.groups.some((group) => group.templated_segments.length > 0)
+        ? "inferred"
+        : "derived",
     authority: parent.authority,
     limitations: result.limitations,
     locations: [

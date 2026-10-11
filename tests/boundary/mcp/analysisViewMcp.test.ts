@@ -1,3 +1,11 @@
+import { API_SURFACE_EXAMPLE } from "../../../src/contracts/analysisViewApiSurfaceExample.js";
+import { createHash } from "node:crypto";
+import { readFile, writeFile } from "node:fs/promises";
+import { WebNetworkCaptureService } from "../../../src/application/WebNetworkCaptureService.js";
+import { decodeHarCapture } from "../../../src/browser/history/HarCapture.js";
+import { join } from "node:path";
+import { apiSurfaceHar } from "../../fixtures/historicalHar.js";
+import { createTestTempDirectory } from "../../fixtures/temporaryDirectory.js";
 import { parseMcpToolError } from "../../fixtures/mcpToolError.js";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { Ajv2020 } from "ajv/dist/2020.js";
@@ -27,13 +35,19 @@ import {
 import { createTestBinarySession } from "../../fixtures/binarySession.js";
 import { BINARY_LAYOUT_TEST_PROVIDER } from "../../fixtures/binaryDiagnostics/layout.js";
 
-const connect = async (binaryLayout?: BinaryLayoutService) => {
+const connect = async (
+  binaryLayout?: BinaryLayoutService,
+  webNetworkCapture?: WebNetworkCaptureService,
+) => {
   const session = createTestBinarySession(() => {
     throw new Error("selected views must not start a deep provider");
   });
   const server = createServer(
     { kind: "session", session },
-    binaryLayout === undefined ? {} : { binaryLayout },
+    {
+      ...(binaryLayout === undefined ? {} : { binaryLayout }),
+      ...(webNetworkCapture === undefined ? {} : { webNetworkCapture }),
+    },
   );
   const client = new Client({ name: "analysis-view-mcp", version: "1" });
   onTestFinished(async () => {
@@ -532,4 +546,88 @@ it("accepts a transport-constraint retained reference as the view source", async
       path: "renderer.js",
     },
   ]);
+});
+
+it("projects an actual HAR capture retained by the public MCP workflow", async () => {
+  const root = await createTestTempDirectory("rea-surface-mcp-");
+  const path = join(root, "surface.har");
+  await writeFile(path, JSON.stringify(apiSurfaceHar()));
+  const service = new WebNetworkCaptureService({
+    inspect: async (input) => {
+      const bytes = await readFile(input.capture_path);
+      return ok({
+        ...decodeHarCapture(bytes.toString("utf8"), input.sensitive_values),
+        artifact: {
+          path: input.capture_path,
+          sha256: createHash("sha256").update(bytes).digest("hex"),
+          bytes: bytes.length,
+        },
+        format: "har",
+        runtime_attribution: "unknown",
+        limitations: [],
+      });
+    },
+  });
+  const { client } = await connect(undefined, service);
+  const captureResponse = await client.callTool({
+    name: "inspect_web_network_capture",
+    arguments: { capture_path: path, format: "har" },
+  });
+  expect(captureResponse.isError).not.toBe(true);
+  const parent = parseEvidence(captureResponse.structuredContent);
+  const response = await client.callTool({
+    name: "inspect_analysis_view",
+    arguments: {
+      source: { kind: "retained-evidence", evidence_id: parent.evidence_id },
+      view: { kind: "api-surface" },
+    },
+  });
+  expect(response.isError).not.toBe(true);
+  const evidence = parseEvidence(response.structuredContent);
+  expect(evidence.confidence).toBe("inferred");
+  expect(evidence.normalized_result).toMatchObject({
+    records: { examined: 13, total: 13, excluded: 0 },
+    coverage: { total: 12, exhausted: true },
+    groups: expect.arrayContaining([
+      expect.objectContaining({
+        path_template: "/users/{numeric}",
+        record_ordinals: [0, 1],
+      }),
+    ]),
+  });
+});
+
+it("reproduces the published API surface example from decoded fixture bytes", async () => {
+  const fixture = apiSurfaceHar();
+  fixture.log.entries = fixture.log.entries.slice(0, 2);
+  const bytes = Buffer.from(JSON.stringify(fixture));
+  const service = new WebNetworkCaptureService({
+    inspect: async () =>
+      ok({
+        ...decodeHarCapture(bytes.toString("utf8"), []),
+        artifact: {
+          path: "/fixtures/api-surface.har",
+          sha256: createHash("sha256").update(bytes).digest("hex"),
+          bytes: bytes.length,
+        },
+        format: "har",
+        runtime_attribution: "unknown",
+        limitations: [],
+      }),
+  });
+  const { client } = await connect(undefined, service);
+  const capture = await client.callTool({
+    name: "inspect_web_network_capture",
+    arguments: { capture_path: "/fixtures/api-surface.har", format: "har" },
+  });
+  expect(parseEvidence(capture.structuredContent).evidence_id).toBe(
+    API_SURFACE_EXAMPLE.input.source.evidence_id,
+  );
+  const response = await client.callTool({
+    name: "inspect_analysis_view",
+    arguments: API_SURFACE_EXAMPLE.input,
+  });
+  expect(parseEvidence(response.structuredContent).normalized_result).toEqual(
+    API_SURFACE_EXAMPLE.output,
+  );
 });

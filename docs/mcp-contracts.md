@@ -363,6 +363,11 @@ analysis, so later views and application workflows read it without repeating
 analysis or moving the complete record through the response. A server without
 session retention refuses summary detail with `capability_unavailable`.
 
+`inspect_analysis_view` also accepts `api-surface` for retained HAR capture Evidence,
+grouping request lines by method, origin and format-rule path template. Templated
+segments and their view Evidence are inferred; exact-literal pages are derived.
+See [derived API surfaces](web-network-captures.md#derived-api-surface).
+
 `inspect_analysis_view` projects a caller-selected view of already completed
 `inspect_binary_layout`, `analyze_javascript_application`, or `analyze_function`
 Evidence. Native views select procedure, pseudocode, assembly, basic blocks,

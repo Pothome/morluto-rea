@@ -1,3 +1,4 @@
+import { analysisViewCaptureEvidence } from "../../fixtures/analysisView.js";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -216,3 +217,27 @@ for (const [view, reason] of [
     },
   );
 }
+
+cliTest("projects API surface from portable HAR Evidence", async ({ cli }) => {
+  const root = await createTestTempDirectory("rea-surface-cli-");
+  const input = join(root, "view.json");
+  await writeFile(
+    input,
+    JSON.stringify({
+      source: { kind: "inline", evidence: analysisViewCaptureEvidence() },
+      view: { kind: "api-surface" },
+    }),
+  );
+  const result = await cli.run({
+    arguments: ["inspect-analysis-view", input, "--json"],
+    environment: { HOME: root, XDG_CONFIG_HOME: root, XDG_CACHE_HOME: root },
+  });
+  expect(result.exitCode).toBe(0);
+  expect(result.json).toMatchObject({
+    confidence: "inferred",
+    normalized_result: {
+      kind: "api-surface",
+      records: { examined: 15, total: 15, excluded: 2 },
+    },
+  });
+});

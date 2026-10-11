@@ -79,11 +79,15 @@ const responseSchema = z.object({
 // Upper bound of serialized bytes one templated segment adds to a group.
 const TEMPLATED_SEGMENT_BYTES = 128;
 
-const pathSegmentCount = (path: string): number => {
-  let count = 0;
-  for (let index = 0; index < path.length; index += 1)
-    if (path.charCodeAt(index) === 0x2f) count += 1;
-  return count;
+/** Recorded path before WHATWG dot-segment removal; query and fragment excluded. */
+const recordedPath = (url: string): string => {
+  const authority = url.indexOf("//");
+  const start = authority < 0 ? url.indexOf(":") + 1 : authority + 2;
+  const tail = url.slice(start);
+  const end = tail.search(/[?#]/u);
+  const beforeQuery = end < 0 ? tail : tail.slice(0, end);
+  const slash = authority < 0 ? 0 : beforeQuery.indexOf("/");
+  return slash < 0 ? "/" : beforeQuery.slice(slash);
 };
 
 const segmentRule = (value: string): z.output<typeof ruleSchema> | null => {
@@ -178,24 +182,19 @@ export const projectWebNetworkApiSurfaceView = (
       excluded.push({ ordinal: record.ordinal, reason: "method-unavailable" });
       continue;
     }
-    projectedBytes +=
-      parsedUrl.pathname.length +
-      pathSegmentCount(parsedUrl.pathname) * TEMPLATED_SEGMENT_BYTES;
-    if (projectedBytes > WEB_NETWORK_CAPTURE_LIMITS.outputBytes)
-      return err(
-        new AnalysisResourceConstraintError(
-          "inspect_analysis_view",
-          "memory",
-          "Path segment expansion would exceed the capture reply budget before grouping.",
-          { output_bytes: WEB_NETWORK_CAPTURE_LIMITS.outputBytes },
-        ),
-      );
+    const path = recordedPath(url);
     const segments: Group["templated_segments"] = [];
-    const template = parsedUrl.pathname
+    let overBudget = false;
+    const template = path
       .split("/")
       .map((value, index) => {
         const rule = segmentRule(value);
-        if (rule === null) return value;
+        if (rule === null || overBudget) return value;
+        projectedBytes += TEMPLATED_SEGMENT_BYTES + value.length;
+        if (projectedBytes > WEB_NETWORK_CAPTURE_LIMITS.outputBytes) {
+          overBudget = true;
+          return value;
+        }
         segments.push({
           segment_index: index - 1,
           rule,
@@ -205,6 +204,15 @@ export const projectWebNetworkApiSurfaceView = (
         return `{${rule}}`;
       })
       .join("/");
+    if (overBudget)
+      return err(
+        new AnalysisResourceConstraintError(
+          "inspect_analysis_view",
+          "memory",
+          "Retained templated segments would exceed the capture reply budget.",
+          { output_bytes: WEB_NETWORK_CAPTURE_LIMITS.outputBytes },
+        ),
+      );
     const key = JSON.stringify([method, parsedUrl.origin, template]);
     let group = buckets.get(key);
     if (group === undefined) {

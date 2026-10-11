@@ -378,3 +378,24 @@ it("seals inferred and literal HAR pages, including a null artifact digest", () 
     error: { _tag: "AnalysisUnsupportedTargetError" },
   });
 });
+
+it("rejects a null projected digest under a present parent subject", () => {
+  const capture = analysisViewCaptureFixture();
+  capture.artifact.sha256 = null;
+  const parent = createEvidence(
+    { path: capture.artifact.path, sha256: "a".repeat(64), format: "file" },
+    { id: "fixture", name: "fixture", version: "1" },
+    {
+      operation: "inspect_web_network_capture",
+      parameters: { sensitive_value_count: 0 },
+      result: capture,
+      confidence: "observed",
+    },
+  );
+  expect(
+    inspectAnalysisView({
+      source: { kind: "inline", evidence: parent },
+      view: { kind: "api-surface" },
+    }),
+  ).toMatchObject({ ok: false, error: { _tag: "EvidenceIntegrityError" } });
+});

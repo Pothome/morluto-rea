@@ -921,13 +921,21 @@ async function inspect(mode, input, errorCategory) {
           view: { kind: "api-surface" },
         },
       });
-      assert.notEqual(surface.isError, true, mcpTextValue(surface));
-      const projected = JSON.parse(mcpTextValue(surface));
-      assert.equal(projected.normalized_result.kind, "api-surface");
-      assert.equal(
-        projected.normalized_result.records.examined,
-        value.normalized_result.records.length,
-      );
+      if ((input.sensitive_values ?? []).length > 0) {
+        // Derived view text cannot be checked against undisclosed declarations.
+        assert.equal(surface.isError, true);
+        const refused = JSON.parse(mcpTextValue(surface));
+        for (const literal of input.sensitive_values)
+          assert.ok(!JSON.stringify(refused).includes(literal));
+      } else {
+        assert.notEqual(surface.isError, true, mcpTextValue(surface));
+        const projected = JSON.parse(mcpTextValue(surface));
+        assert.equal(projected.normalized_result.kind, "api-surface");
+        assert.equal(
+          projected.normalized_result.records.examined,
+          value.normalized_result.records.length,
+        );
+      }
     }
     return value.normalized_result;
   }

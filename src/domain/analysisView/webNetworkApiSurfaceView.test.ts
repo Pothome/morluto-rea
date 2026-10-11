@@ -220,3 +220,23 @@ it("budgets path segment expansion before grouping", () => {
     error: { _tag: "AnalysisResourceConstraintError" },
   });
 });
+
+it("charges only templated segments and keeps recorded dot segments", () => {
+  const capture = analysisViewCaptureFixture();
+  capture.records = capture.records.slice(0, 3);
+  const urls = [
+    `https://api.example.test${"/a".repeat(800_000)}`,
+    "https://api.example.test/a/%2e%2e/admin",
+    "https://api.example.test/admin",
+  ];
+  capture.records.forEach((record, index) => {
+    record.reported = { request: { method: "GET", url: urls[index] ?? null } };
+  });
+  const result = project(capture);
+  if (!result.ok || result.value.kind !== "api-surface")
+    throw new Error("Expected surface");
+  expect(result.value.groups.map((group) => group.path_template)).toEqual(
+    expect.arrayContaining(["/a/%2e%2e/admin", "/admin"]),
+  );
+  expect(result.value.groups).toHaveLength(3);
+});

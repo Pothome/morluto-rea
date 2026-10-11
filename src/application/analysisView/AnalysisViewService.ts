@@ -69,7 +69,6 @@ export const inspectAnalysisViewValidated = (
   if (!projected.ok) return projected;
   if (
     parent.subject !== null &&
-    projected.value.artifact.sha256 !== null &&
     parent.subject.digest.sha256 !== projected.value.artifact.sha256
   )
     return err(

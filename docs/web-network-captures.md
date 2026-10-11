@@ -127,7 +127,8 @@ credentials, headers and bodies are not copied into groups.
 | `hex`      | At least 32 hexadecimal digits                       | `{hex}`      |
 | `iso-date` | Valid calendar date `YYYY-MM-DD`                     | `{iso-date}` |
 
-Rules apply in table order to encoded pathname segments. Segment indexes start
+Rules apply in table order to the recorded, still-encoded request path, read
+before WHATWG dot-segment removal, so `/a/%2e%2e/admin` and `/admin` stay distinct. Segment indexes start
 at zero after the leading slash. Each matched segment lists its observed literals
 and `basis: "inferred"`. A page with a match has inferred Evidence; a page with
 only literal groups has derived Evidence. Version prefixes, short opaque IDs
@@ -147,8 +148,9 @@ network activity. Native mitmproxy captures return a typed unsupported error.
 Parents inspected with `sensitive_values`, or whose Evidence does not record
 `sensitive_value_count`, also return a typed unsupported error: the view writes
 path templates and limitation text that it cannot check against declarations
-the parent does not retain. Path segment expansion is budgeted against the 96 MiB
-reply budget before grouping and returns `resource_constraint` when exceeded.
+the parent does not retain. Retained templated segments are budgeted against the
+96 MiB reply budget and return `resource_constraint` when exceeded; literal
+segments are not charged.
 
 ## Resource and lifecycle boundaries
 

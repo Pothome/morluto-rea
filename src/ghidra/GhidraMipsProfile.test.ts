@@ -174,19 +174,22 @@ describe("recordless legacy MIPS32 admission", () => {
     },
   );
 
-  it("treats an absent ABI flags record the same as an unobserved one", () => {
+  it("requires an inspected absence; a merely unobserved record stays refused", () => {
     const ghidra = new GhidraProvider(config, silentLogger, {}, host);
     const withRecord = target({ flags: 0x50000001 }) as BinaryTarget & {
       mips: MipsElfMetadata;
     };
-    const { abiFlags: _record, ...recordlessMips } = withRecord.mips;
+    const { abiFlags: _record, ...unobservedMips } = withRecord.mips;
     void _record;
     expect(
       ghidra.inspectTargetSupport({
         ...withRecord,
-        mips: recordlessMips,
-      } as BinaryTarget).status,
-    ).toBe("supported");
+        mips: unobservedMips,
+      } as BinaryTarget),
+    ).toMatchObject({
+      status: "unsupported",
+      reason: expect.stringContaining("recordless legacy header"),
+    });
   });
 
   it.each([

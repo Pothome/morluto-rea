@@ -23,7 +23,9 @@ export const isLegacyMipsAdmission = (target: BinaryTarget): boolean => {
     (arch === 0x50000000 || arch === 0x70000000) &&
     (flags & 0x0000f000) === 0 &&
     (flags & 0x20) === 0 &&
-    (abiFlags === undefined || abiFlags === null)
+    // Undefined means the record was not inspected; only an inspected
+    // absence establishes the recordless legacy admission.
+    abiFlags === null
   );
 };
 

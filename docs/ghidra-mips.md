@@ -16,10 +16,27 @@ PE, managed and Mach-O architecture sets are unchanged.
 The first Ghidra lane admits ELF32 `ET_EXEC`, little or big endian, with explicit
 o32 and `EF_MIPS_ARCH_32R2` flags and no machine-specific or ASE encoding flags.
 These are header declarations, not proof that every instruction conforms to
-that ISA. ELF64, n32/n64, unspecified ABI, MIPS16/microMIPS, machine-specific
+that ISA. ELF64, n32/n64, MIPS16/microMIPS, machine-specific
 variants, shared/relocatable objects and PSP PRX are not covered by this lane.
 Their family may be identified, but provider selection returns the specific
 unsupported constraint rather than guessing a compatible profile.
+
+A second admission covers recordless legacy firmware images
+([#1620](https://github.com/morluto/rea/issues/1620)): ELF32 `ET_EXEC` headers
+declaring `EF_MIPS_ARCH_32` or `EF_MIPS_ARCH_32R2` with an unspecified ABI
+field, `EF_MIPS_ABI2` clear, and an _inspected_ absence of any ABI flags
+record (a target whose record was merely not observed stays refused). For
+these images o32 is an analysis assumption derived from the ELF32/ET_EXEC
+structure, recorded as `mips_abi_basis` in the profile and stated as a
+limitation in Evidence, never a declared fact; floating-point ABI semantics
+stay unverified. Ghidra's own header auto-selection picks a 64-bit language
+for exactly these files, so the lane pins `-processor MIPS:<LE|BE>:32:default`
+through a `provider-pinned-v1` profile selection and checks the
+bridge-reported `language_id` after import. A caller-selected
+`REA_GHIDRA_LANGUAGE_ID`/`REA_GHIDRA_COMPILER_SPEC_ID` still wins over the
+pin; combining the pinned profile with an environment override is a typed
+refusal. A header that declares an ABI field but carries no record is still
+refused.
 
 Explicit `EF_MIPS_FP64` and `EF_MIPS_NAN2008` declarations are refused. Their
 absence is insufficient: Clang can emit identical `e_flags` for FP32, FP64 and

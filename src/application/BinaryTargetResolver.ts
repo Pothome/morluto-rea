@@ -38,6 +38,7 @@ import {
 import {
   parseExecutableHeader,
   parsePeRecord,
+  WASM_BINARY_MODULE_REASON,
   type ExecutableMetadata,
 } from "../domain/binaryTarget.js";
 
@@ -168,7 +169,16 @@ export const parseBinaryTarget = async (
         hostArchitecture,
         signal,
       );
-      if (!detected.ok) return err(new BinaryTargetError(path, detected.error));
+      if (!detected.ok)
+        return err(
+          new BinaryTargetError(
+            path,
+            detected.error,
+            detected.error === WASM_BINARY_MODULE_REASON
+              ? { constraint: "webassembly_module_header" }
+              : undefined,
+          ),
+        );
       return ok({
         path,
         sourcePath: process.platform === "win32" ? candidate : canonical,

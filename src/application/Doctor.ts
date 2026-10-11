@@ -352,7 +352,8 @@ export const systemDoctorHost = (
         name: "target",
         ok: false,
         classification:
-          targetError?.constraint === "directory_requires_file"
+          targetError?.constraint === "directory_requires_file" ||
+          targetError?.constraint === "webassembly_module_header"
             ? "unsupported_target"
             : "config_drift",
         detail: path,

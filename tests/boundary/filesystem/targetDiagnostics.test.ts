@@ -44,6 +44,40 @@ describe("target route diagnostics", () => {
       details: { reason: expect.stringContaining("does not exist") },
     });
   });
+  it("identifies a WebAssembly module header and points to the optional inspection lane", async () => {
+    const directory = await createTestTempDirectory("rea-wasm-target-");
+    const path = join(directory, "module.wasm");
+    await writeFile(
+      path,
+      Buffer.from([
+        0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
+      ]),
+    );
+    const result = await parseBinaryTarget(path);
+    if (result.ok)
+      throw new Error("WebAssembly module was admitted as a native target");
+    const projected = projectAnalysisError(result.error);
+    expect(projected).toMatchObject({
+      code: "target_unavailable",
+      details: {
+        path: await realpath(path),
+        constraint: "webassembly_module_header",
+      },
+    });
+    expect(projected.message).toContain("WebAssembly");
+    expect(projected.remediation.action).toContain("inspect_wasm_artifact");
+    expect(projected.remediation.action).toContain("REA_WABT_BIN_DIRECTORY");
+    expect(projected.remediation.action).toContain(
+      "does not decompile or execute",
+    );
+    const doctor = systemDoctorHost();
+    expect(await doctor.inspectTarget?.(path)).toMatchObject({
+      ok: false,
+      classification: "unsupported_target",
+      details: { constraint: "webassembly_module_header" },
+      remediation: projected.remediation.action,
+    });
+  });
   it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
     "preserves a real filesystem permission denial",
     async () => {

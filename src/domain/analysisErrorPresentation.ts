@@ -75,6 +75,11 @@ export const analysisErrorRemediationAction = (
   )
     return "For a JavaScript/Electron application directory, call analyze_javascript_application with input_path or run `rea analyze <directory>`. For binary analysis, select its executable file.";
   if (
+    error instanceof BinaryTargetError &&
+    error.constraint === "webassembly_module_header"
+  )
+    return "The native analysis lanes do not admit WebAssembly modules. When this session advertises the optional inspect_wasm_artifact operation, call it with path set to this artifact (CLI: rea inspect-wasm-artifact): it inspects module sections, imports, exports and WAT forms with caller-supplied WABT (REA_WABT_BIN_DIRECTORY), and does not decompile or execute the module. Check the advertised tool catalog to see whether the operation is available in this session; REA installs nothing and fetches nothing.";
+  if (
     error instanceof AnalysisAccessDeniedError ||
     (error instanceof BinaryTargetError && error.systemCode !== undefined)
   )
@@ -213,7 +218,9 @@ export const analysisErrorUserMessage = (error: AnalysisError): string => {
   if (error instanceof BinaryTargetError)
     return error.constraint === "directory_requires_file"
       ? "open_binary accepts files and macOS app bundles. This target is a directory; JavaScript/Electron application directories can be analyzed directly with analyze_javascript_application or `rea analyze <directory>`."
-      : `${error.message}. Check that the path exists, is readable, and points to a supported file.`;
+      : error.constraint === "webassembly_module_header"
+        ? "open_binary does not admit WebAssembly modules: no native analysis lane loads them, so the artifact was not opened. The exact restriction is the selected binary session's native lane, not a missing required engine."
+        : `${error.message}. Check that the path exists, is readable, and points to a supported file.`;
   if (error._tag === "ProcessCaptureError")
     return (
       error.userMessage ??

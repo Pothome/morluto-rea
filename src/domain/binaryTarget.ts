@@ -36,6 +36,17 @@ export type ExecutableMetadata =
     };
 
 /**
+ * Rejection reason for a version-1 WebAssembly binary module preamble. Native
+ * analysis lanes do not admit WASM modules; the reserved reason lets target
+ * admission attach its typed constraint instead of a generic format failure.
+ * Only the v1 preamble is matched: the inspection lane is verified against
+ * decoded v1 modules, so an unknown future version stays a generic format
+ * failure rather than a compatibility claim.
+ */
+export const WASM_BINARY_MODULE_REASON =
+  "the target is a version-1 WebAssembly binary module";
+
+/**
  * Parse supported executable headers without I/O. The caller supplies the host
  * architecture used for deterministic FAT Mach-O slice selection.
  */
@@ -57,6 +68,18 @@ export const parseExecutableHeader = (
     return parseThinMachO(bytes, magic, fileSize);
   if ([0xcafebabe, 0xbebafeca, 0xcafebabf, 0xbfbafeca].includes(magic))
     return parseFatMachO(bytes, magic, hostArchitecture, fileSize);
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x00 &&
+    bytes[1] === 0x61 &&
+    bytes[2] === 0x73 &&
+    bytes[3] === 0x6d &&
+    bytes[4] === 0x01 &&
+    bytes[5] === 0x00 &&
+    bytes[6] === 0x00 &&
+    bytes[7] === 0x00
+  )
+    return err(WASM_BINARY_MODULE_REASON);
   return err("unsupported binary format");
 };
 

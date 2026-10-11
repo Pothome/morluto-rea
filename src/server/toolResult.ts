@@ -14,6 +14,7 @@ import { AnalysisResourceConstraintError } from "../domain/analysisErrorCore.js"
 import {
   encodeToolResult,
   MCP_RESULT_STRING_LIMIT,
+  TARGET_CONTENT_RESULT_META,
 } from "./toolResultEncoding.js";
 
 /** Create one delivery policy from the already selected, parsed response budget. */
@@ -115,11 +116,19 @@ export class ToolResultDelivery {
     contract: ToolContract,
     recovery: Readonly<Record<string, JsonValue>> = {},
   ): CallToolResult {
-    const encoded = encodeToolResult(value, this.resultBudgetBytes);
+    const encoded = encodeToolResult(
+      value,
+      this.resultBudgetBytes,
+      "structured-and-text",
+      contract.returnsTargetContent,
+    );
     if (encoded.ok)
       return {
         content: [{ type: "text", text: encoded.text }],
         structuredContent: value,
+        ...(contract.returnsTargetContent
+          ? { _meta: TARGET_CONTENT_RESULT_META }
+          : {}),
       };
     const retainedEvidence = recovery.evidence_reference !== undefined;
     const recoveryAdvice = retainedEvidence

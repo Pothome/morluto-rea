@@ -60,6 +60,7 @@ const contract: ToolContract = {
     idempotentHint: true,
     openWorldHint: false,
   },
+  returnsTargetContent: false,
   examples: [{ title: "Example fixture request", input: {} }],
 };
 

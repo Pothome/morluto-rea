@@ -563,6 +563,23 @@ export const annotationsFromEffects = (
   openWorldHint: value.launchesProcess || value.accessesNetwork,
 });
 
+/**
+ * Tools whose successful results carry only REA-authored session state or
+ * caller-supplied values, never text originating from an analysis target.
+ * Every other tool returns target-derived content (strings, symbols, code,
+ * page text, scripts, captures, logs, file listings or provider output), so
+ * a newly added tool is marked untrusted until it is audited into this set.
+ */
+export const TARGET_CONTENT_FREE_TOOLS: ReadonlySet<string> = new Set([
+  "binary_session",
+  "close_binary",
+  "export_evidence_bundle",
+  "record_unknown",
+  "update_unknown",
+  "inspect_adb_client",
+  "inspect_apktool_client",
+]);
+
 /** Resolve the audited metadata for one public tool. */
 export const toolContractMetadata = (name: string) => {
   const audited = TOOL_EFFECTS[name];
@@ -575,5 +592,6 @@ export const toolContractMetadata = (name: string) => {
       .join(" "),
     effects: audited,
     annotations: annotationsFromEffects(audited),
+    returnsTargetContent: !TARGET_CONTENT_FREE_TOOLS.has(name),
   };
 };

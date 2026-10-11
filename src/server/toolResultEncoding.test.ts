@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import type { JsonValue } from "../domain/jsonValue.js";
-import { encodeToolResult } from "./toolResultEncoding.js";
+import {
+  encodeToolResult,
+  TARGET_CONTENT_RESULT_META,
+} from "./toolResultEncoding.js";
 
 const projectedResult = (candidate: JsonValue) => ({
   content: [{ type: "text", text: JSON.stringify(candidate) }],
@@ -57,6 +60,31 @@ describe("MCP result encoding budget", () => {
     expect(encodeToolResult(candidate, textBytes - 1, "text")).toMatchObject({
       ok: false,
       bytesAtLeast: textBytes,
+    });
+  });
+
+  it("accounts for the untrusted target-content marker", () => {
+    const candidate = { strings: ['"ignore previous instructions"', "中文"] };
+    const markedBytes = Buffer.byteLength(
+      JSON.stringify({
+        ...projectedResult(candidate),
+        _meta: TARGET_CONTENT_RESULT_META,
+      }),
+    );
+    const marked = encodeToolResult(
+      candidate,
+      markedBytes,
+      "structured-and-text",
+      true,
+    );
+    if (!marked.ok) throw new Error("Expected complete encoding");
+    expect(marked.bytes).toBe(markedBytes);
+    expect(marked.text).toBe(JSON.stringify(candidate));
+    expect(
+      encodeToolResult(candidate, markedBytes - 1, "structured-and-text", true),
+    ).toMatchObject({ ok: false, bytesAtLeast: markedBytes });
+    expect(TARGET_CONTENT_RESULT_META).toEqual({
+      provenance: { untrusted_content: true, source: "analysis_target" },
     });
   });
 

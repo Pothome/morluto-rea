@@ -5,6 +5,18 @@
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M1 1 L8 5 L1 9" fill="none" stroke="#5b6570" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></marker>
     <marker id="blue-arrow" markerWidth="12" markerHeight="12" refX="9" refY="6" orient="auto" markerUnits="userSpaceOnUse"><path d="M1 1 L9 6 L1 11" fill="none" stroke="#294f82" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></marker>
   </defs>
+<style>
+@media (prefers-color-scheme: dark){
+svg{background-color:#181825}
+[fill="#20252b"]{fill:#cdd6f4}
+[fill="#294f82"]{fill:#89b4fa}
+[stroke="#294f82"]{stroke:#89b4fa}
+[fill="#5b6570"]{fill:#a6adc8}
+[stroke="#5b6570"]{stroke:#a6adc8}
+[stroke="#87929e"]{stroke:#7f849c}
+[fill="#ffffff"]{fill:#181825}
+}
+</style>
   <rect width="1774" height="887" fill="#ffffff"/>
   <g font-family="Arial, Helvetica, sans-serif" fill="#20252b">
     <text x="40" y="96" font-size="68" font-weight="700">REA investigation flow</text>

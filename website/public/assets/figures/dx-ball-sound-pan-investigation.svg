@@ -4,6 +4,17 @@
   <defs>
     <marker id="arrow" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto" markerUnits="userSpaceOnUse"><path d="M1 1 L11 7 L1 13 Z" fill="#5b6570"/></marker>
   </defs>
+<style>
+@media (prefers-color-scheme: dark){
+svg{background-color:#181825}
+[fill="#20252b"]{fill:#cdd6f4}
+[fill="#294f82"]{fill:#89b4fa}
+[fill="#5b6570"]{fill:#a6adc8}
+[stroke="#5b6570"]{stroke:#a6adc8}
+[stroke="#6c7e8b"]{stroke:#7f849c}
+[fill="#ffffff"]{fill:#181825}
+}
+</style>
   <rect width="1774" height="887" fill="#ffffff"/>
   <g font-family="Arial, Helvetica, sans-serif" fill="#20252b">
     <text x="40" y="166" font-size="63" font-weight="700">DX-Ball sound-pan investigation</text>

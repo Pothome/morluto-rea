@@ -33,9 +33,13 @@ function initializeDinoDemo(demo) {
     slider.value = speed.toFixed(1);
   };
 
+  const color = (name, fallback) =>
+    getComputedStyle(canvas).getPropertyValue(name).trim() || fallback;
+
   const draw = () => {
+    const ink = color("--dino-ink", "#5b6570");
     context.clearRect(0, 0, canvas.width, canvas.height);
-    context.strokeStyle = "#b7c0c9";
+    context.strokeStyle = color("--dino-ground", "#b7c0c9");
     context.beginPath();
     context.moveTo(0, ground);
     context.lineTo(canvas.width, ground);
@@ -44,7 +48,7 @@ function initializeDinoDemo(demo) {
       context.lineTo(x + 12, ground + 7);
     }
     context.stroke();
-    context.fillStyle = "#5b6570";
+    context.fillStyle = ink;
     for (const obstacle of obstacles) {
       context.fillRect(
         obstacle.x + 6,
@@ -59,12 +63,14 @@ function initializeDinoDemo(demo) {
     }
     context.save();
     context.translate(dinosaurX, ground - 59 - height);
-    context.fillStyle = crashed ? "#8c4b40" : "#294f82";
+    context.fillStyle = crashed
+      ? color("--dino-crash", "#8c4b40")
+      : color("--dino-player", "#294f82");
     context.fill(dinosaur);
-    context.fillStyle = "#ffffff";
+    context.fillStyle = color("--dino-eye", "#ffffff");
     context.fillRect(39, 7, 4, 4);
     context.restore();
-    context.fillStyle = "#5b6570";
+    context.fillStyle = ink;
     context.font = "13px monospace";
     context.textAlign = "right";
     context.fillText(
@@ -218,6 +224,9 @@ function initializeDinoDemo(demo) {
         stop(t("Paused. Press Play to continue."));
     }).observe(demo);
   }
+  window
+    .matchMedia("(prefers-color-scheme: dark)")
+    .addEventListener("change", draw);
   demo.querySelector(".dino-fallback").setAttribute("hidden", "");
   demo.querySelector(".dino-controls").hidden = false;
   canvas.hidden = false;

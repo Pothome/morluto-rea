@@ -1,5 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" fill="none">
   <title>An analyst thinking at a computer</title>
+  <style>
+@media (prefers-color-scheme: dark){
+[stroke="#294f82"]{stroke:#89b4fa}
+[fill="#5b6570"]{fill:#a6adc8}
+[stroke="#5b6570"]{stroke:#a6adc8}
+[stroke="#e0e5e9"]{stroke:#45475a}
+[fill="#edf2f8"]{fill:#313244}
+[fill="#f4f6f8"]{fill:#1e1e2e}
+[fill="#fff"]{fill:#181825}
+}
+  </style>
   <g stroke="#5b6570" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
     <path d="M12 101h136" stroke="#e0e5e9" />
     <path d="M24 54h38l-6 35H18z" fill="#f4f6f8" />

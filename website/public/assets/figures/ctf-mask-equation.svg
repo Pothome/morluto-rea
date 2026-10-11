@@ -2,6 +2,23 @@
 <title id="title">One check reveals one character</title>
 <desc id="desc">The seventh mask selects only position 21 in the six by six input grid. Its character code must equal 55, so the character is 7. The other masks select different positions and give further equations.</desc>
 <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#8191a2"/></marker></defs>
+<style>
+@media (prefers-color-scheme: dark){
+svg{background-color:#181825}
+[fill="#20252b"]{fill:#cdd6f4}
+[fill="#294f82"]{fill:#89b4fa}
+[stroke="#294f82"]{stroke:#89b4fa}
+[fill="#5b6570"]{fill:#a6adc8}
+[fill="#7a8490"]{fill:#9399b2}
+[fill="#8191a2"]{fill:#7f849c}
+[stroke="#8191a2"]{stroke:#7f849c}
+[stroke="#e0e5e9"]{stroke:#45475a}
+[fill="#edf2f8"]{fill:#313244}
+[fill="#f4f6f8"]{fill:#1e1e2e}
+[fill="#fafbfc"]{fill:#11111b}
+[fill="#ffffff"]{fill:#181825}
+}
+</style>
 <rect width="760" height="475" fill="#ffffff"/>
 <g font-family="system-ui, -apple-system, sans-serif" font-size="14" fill="#20252b">
 <text x="32" y="36" font-size="19" font-weight="600">One check reveals one character</text>

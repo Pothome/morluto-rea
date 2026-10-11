@@ -401,6 +401,22 @@ class WebsiteTranslationChecks(unittest.TestCase):
                 server.shutdown()
                 worker.join()
 
+    def test_every_reading_page_offers_light_and_dark_theme_colors(self):
+        site = ROOT / "website/_site"
+        english_pages = reading_pages(ROOT / "website/public")
+        self.assertTrue(english_pages)
+        for language in languages(ROOT):
+            code = language["code"]
+            for original in english_pages:
+                relative = original.relative_to(ROOT / "website/public")
+                for path in {original, site / relative if code == "en" else site / code / relative}:
+                    with self.subTest(language=code, page=str(path.relative_to(ROOT))):
+                        doc = Document(path.read_text())
+                        media = sorted(node.attrs.get("media") for node in doc.nodes if node.tag == "meta" and node.attrs.get("name") == "theme-color")
+                        self.assertEqual(media, ["(prefers-color-scheme: dark)", "(prefers-color-scheme: light)"])
+        styles = (ROOT / "website/public/assets/styles.css").read_text()
+        self.assertTrue("@media (prefers-color-scheme: dark)" in styles, "styles.css has no dark color scheme block")
+
 
 if __name__ == "__main__":
     unittest.main()

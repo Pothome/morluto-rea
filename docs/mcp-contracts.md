@@ -321,8 +321,18 @@ session. Its exact reference is reported in
 `details.reported_limits.evidence_reference`; call `inspect_analysis_view` with
 that reference for a summary, one section/module, or a stable page, or call
 `export_evidence_bundle` with a destination path. Complete
-bundle exports stream canonical JSON into an atomically published file. A broad
-follow-up or `get_evidence_bundle` can also exceed the response budget; exporting
+bundle exports stream canonical JSON into an atomically published file.
+
+For oversized native function Evidence, `details.reported_limits.continuation`
+contains a ready-to-call `inspect_analysis_view` request for the retained
+pseudocode's first page. Use its `name` and `arguments` directly, then follow
+`normalized_result.coverage.next_offset` for subsequent pages. The suggested
+limit is the view contract's default, not a guarantee that arbitrary source or
+metadata fits; reduce the limit or export when needed. Continuations are
+offered for completed `analyze_function` results only after session recording is
+acknowledged; the complete result and its retention reference remain intact.
+
+A broad follow-up or `get_evidence_bundle` can also exceed the response budget; exporting
 preserves the complete session without sending it through a single MCP frame.
 To discover existing records without their large payloads, call
 `get_evidence_bundle` with `detail: "summary"`. Its `result.records` contain

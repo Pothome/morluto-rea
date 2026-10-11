@@ -4,11 +4,15 @@ import { STDIO_DEFAULT_MAX_BUFFER_SIZE } from "@modelcontextprotocol/server";
 import type { ToolContract } from "../contracts/toolContractTypes.js";
 import type { Evidence } from "../domain/evidence.js";
 import {
+  INSPECT_ANALYSIS_VIEW_OPERATION,
+  inspectAnalysisViewInputSchema,
+} from "../domain/analysisView/analysisView.js";
+import {
   projectAnalysisError,
   type AnalysisErrorProjection,
 } from "../domain/analysisErrorProjection.js";
 import type { AnalysisError } from "../domain/analysisErrorBase.js";
-import type { JsonValue } from "../domain/jsonValue.js";
+import { jsonValueSchema, type JsonValue } from "../domain/jsonValue.js";
 import type { Result } from "../domain/result.js";
 import { AnalysisResourceConstraintError } from "../domain/analysisErrorCore.js";
 import {
@@ -21,6 +25,24 @@ export const createToolResultDelivery = (
   maximumResponseBytes: number | undefined,
 ): ToolResultDelivery =>
   new ToolResultDelivery(maximumResponseBytes ?? STDIO_DEFAULT_MAX_BUFFER_SIZE);
+
+/** Offer a named, schema-validated source page only for retained native analysis. */
+const nativeEvidenceContinuation = (
+  evidence: Evidence,
+): Readonly<Record<string, JsonValue>> => {
+  if (evidence.operation !== "analyze_function") return {};
+  const input = inspectAnalysisViewInputSchema.safeParse({
+    source: { kind: "retained-evidence", evidence_id: evidence.evidence_id },
+    view: { kind: "native", facet: "pseudocode", offset: 0 },
+  });
+  if (!input.success) return {};
+  return {
+    continuation: {
+      name: INSPECT_ANALYSIS_VIEW_OPERATION,
+      arguments: jsonValueSchema.parse(input.data),
+    },
+  };
+};
 
 /** Immutable encoding and recovery policy shared by one MCP server. */
 export class ToolResultDelivery {
@@ -61,6 +83,7 @@ export class ToolResultDelivery {
                   kind: "retained-evidence",
                   evidence_id: evidence.evidence_id,
                 },
+                ...nativeEvidenceContinuation(evidence),
               }),
         });
   }
@@ -122,11 +145,14 @@ export class ToolResultDelivery {
         structuredContent: value,
       };
     const retainedEvidence = recovery.evidence_reference !== undefined;
-    const recoveryAdvice = retainedEvidence
-      ? "Export retained evidence to consume the complete analysis, or use complete CLI JSON output."
-      : encoded.constraint === "string-length"
-        ? "Use complete CLI JSON output to consume the analysis."
-        : "Use a larger MCP response budget with a matching client receive buffer, or use complete CLI JSON output to consume the analysis.";
+    const recoveryAdvice =
+      recovery.continuation !== undefined
+        ? "Call inspect_analysis_view with the supplied continuation arguments to read retained pseudocode. Follow coverage.next_offset for subsequent pages; reduce the page limit if needed, or export the complete retained Evidence."
+        : retainedEvidence
+          ? "Export retained evidence to consume the complete analysis, or use complete CLI JSON output."
+          : encoded.constraint === "string-length"
+            ? "Use complete CLI JSON output to consume the analysis."
+            : "Use a larger MCP response budget with a matching client receive buffer, or use complete CLI JSON output to consume the analysis.";
     return this.toErrorToolResult(
       new AnalysisResourceConstraintError(
         contract.name,
@@ -144,6 +170,9 @@ export class ToolResultDelivery {
           constraint: encoded.constraint,
           ...recovery,
         },
+        recovery.continuation === undefined
+          ? undefined
+          : { remediationAction: recoveryAdvice },
       ),
     );
   }
